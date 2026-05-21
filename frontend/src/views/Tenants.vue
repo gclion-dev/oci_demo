@@ -48,6 +48,7 @@
         <table class="table">
           <thead>
             <tr>
+              <th></th>
               <th>账户名称</th>
               <th>区域</th>
               <th>Tenancy OCID</th>
@@ -58,6 +59,12 @@
           </thead>
           <tbody>
             <tr v-for="row in filteredTenants" :key="row.id">
+              <td>
+                <label class="toggle-switch">
+                  <input type="checkbox" :checked="row.is_active" @change="toggleActive(row)" />
+                  <span class="toggle-slider"></span>
+                </label>
+              </td>
               <td class="font-medium">{{ row.name }}</td>
               <td>
                 <div class="flex flex-col gap-1 items-start">
@@ -66,25 +73,24 @@
               </td>
               <td class="font-mono text-xs max-w-[200px] truncate" :title="row.tenancy_ocid">{{ row.tenancy_ocid }}</td>
               <td>
-                <label class="toggle-switch">
-                  <input type="checkbox" :checked="row.is_active" @change="toggleActive(row)" />
-                  <span class="toggle-slider"></span>
-                </label>
+                <span :class="row.is_active ? 'badge-success' : 'badge-neutral'">
+                  {{ row.is_active ? '启用' : '禁用' }}
+                </span>
               </td>
               <td class="whitespace-nowrap">{{ formatDate(row.created_at) }}</td>
               <td class="whitespace-nowrap">
                 <div class="flex items-center gap-1">
-                  <button class="btn-ghost btn-sm whitespace-nowrap" @click="$router.push(`/instances/${row.id}`)">实例</button>
+                  <button class="btn-ghost btn-sm whitespace-nowrap" :disabled="!row.is_active" @click="$router.push(`/instances/${row.id}`)">实例</button>
                   <button class="btn-ghost btn-sm whitespace-nowrap" @click="testConn(row)">测试</button>
                   <button class="btn-ghost btn-sm whitespace-nowrap" @click="openEdit(row)">编辑</button>
                   <div class="relative">
-                    <button class="btn-ghost btn-sm whitespace-nowrap" @click="toggleDropdown($event, row.id)">更多 ▾</button>
+                    <button class="btn-ghost btn-sm whitespace-nowrap" :disabled="!row.is_active" @click="toggleDropdown($event, row.id)">更多 ▾</button>
                   </div>
                 </div>
               </td>
             </tr>
             <tr v-if="filteredTenants.length === 0 && !loading">
-              <td colspan="6" class="text-center text-surface-400 py-8">暂无账户数据</td>
+              <td colspan="7" class="text-center text-surface-400 py-8">暂无账户数据</td>
             </tr>
           </tbody>
         </table>
