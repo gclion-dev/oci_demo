@@ -48,6 +48,18 @@
           </router-link>
         </template>
       </nav>
+
+      <!-- Bottom: 个人设置 -->
+      <div class="shrink-0 px-2 py-3">
+        <router-link
+          to="/profile"
+          class="nav-item"
+          :class="isActive('/profile') ? 'nav-item-active' : 'nav-item-inactive'"
+        >
+          <component :is="IconProfile" class="w-5 h-5 shrink-0" />
+          <span v-if="!collapsed" class="truncate">个人设置</span>
+        </router-link>
+      </div>
     </aside>
 
     <!-- Main area -->
@@ -129,7 +141,6 @@ const navItems = [
   { path: '/cloudflare', label: 'Cloudflare DNS', icon: IconCloudflare },
   { path: '/bills', label: '账单监控', icon: IconBills },
   { path: '/notify', label: '通知配置', icon: IconNotify },
-  { path: '/profile', label: '个人设置', icon: IconProfile },
 ]
 
 const titleMap: Record<string, string> = {

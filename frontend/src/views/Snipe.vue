@@ -125,7 +125,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import api from '@/api'
 import dayjs from 'dayjs'
 import { useToast } from '@/composables/useToast'
@@ -145,7 +145,7 @@ const logVisible = ref(false)
 const saving = ref(false)
 const currentLog = ref('')
 const currentTaskId = ref<number | null>(null)
-let refreshTimer: ReturnType<typeof setInterval> | null = null
+
 
 const form = reactive({
   tenant_id: null as number | null,
@@ -245,7 +245,5 @@ async function refreshLog() {
 
 onMounted(() => {
   load()
-  refreshTimer = setInterval(load, 8000)
 })
-onUnmounted(() => { if (refreshTimer) clearInterval(refreshTimer) })
 </script>

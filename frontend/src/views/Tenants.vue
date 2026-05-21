@@ -60,8 +60,8 @@
             <tr v-for="row in filteredTenants" :key="row.id">
               <td class="font-medium">{{ row.name }}</td>
               <td>
-                <div class="flex flex-wrap gap-1">
-                  <span v-for="r in row.region" :key="r" class="badge-info">{{ r }}</span>
+                <div class="flex flex-col gap-1 items-start">
+                  <span v-for="r in row.region" :key="r" class="badge-info whitespace-nowrap">{{ r }}</span>
                 </div>
               </td>
               <td class="font-mono text-xs max-w-[200px] truncate" :title="row.tenancy_ocid">{{ row.tenancy_ocid }}</td>
@@ -71,13 +71,13 @@
                 </span>
               </td>
               <td class="whitespace-nowrap">{{ formatDate(row.created_at) }}</td>
-              <td>
+              <td class="whitespace-nowrap">
                 <div class="flex items-center gap-1">
-                  <button class="btn-ghost btn-sm" @click="$router.push(`/instances/${row.id}`)">实例</button>
-                  <button class="btn-ghost btn-sm" @click="testConn(row)">测试</button>
-                  <button class="btn-ghost btn-sm" @click="openEdit(row)">编辑</button>
+                  <button class="btn-ghost btn-sm whitespace-nowrap" @click="$router.push(`/instances/${row.id}`)">实例</button>
+                  <button class="btn-ghost btn-sm whitespace-nowrap" @click="testConn(row)">测试</button>
+                  <button class="btn-ghost btn-sm whitespace-nowrap" @click="openEdit(row)">编辑</button>
                   <div class="relative">
-                    <button class="btn-ghost btn-sm" @click="toggleDropdown($event, row.id)">更多 ▾</button>
+                    <button class="btn-ghost btn-sm whitespace-nowrap" @click="toggleDropdown($event, row.id)">更多 ▾</button>
                   </div>
                 </div>
               </td>
