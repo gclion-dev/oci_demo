@@ -9,7 +9,7 @@
           <label class="label">选择云账户</label>
           <select v-model="selectedTenant" class="select w-52" @change="loadBill">
             <option :value="null" disabled>请选择</option>
-            <option v-for="t in tenants" :key="t.id" :value="t.id">{{ t.name }}</option>
+            <option v-for="t in tenants.filter(x => x.is_active)" :key="t.id" :value="t.id">{{ t.name }}</option>
           </select>
         </div>
         <div class="pt-5">

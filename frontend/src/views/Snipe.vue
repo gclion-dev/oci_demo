@@ -59,7 +59,7 @@
           <label class="label">云账户</label>
           <select v-model="form.tenant_id" class="select" required @change="onTenantChange">
             <option :value="null" disabled>选择云账户</option>
-            <option v-for="t in tenants" :key="t.id" :value="t.id">{{ t.name }}</option>
+            <option v-for="t in tenants.filter(x => x.is_active)" :key="t.id" :value="t.id">{{ t.name }}</option>
           </select>
         </div>
         <div>

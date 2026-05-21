@@ -78,7 +78,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="t in tenants" :key="t.id">
+              <tr v-for="t in tenants.filter(x => x.is_active)" :key="t.id">
                 <td class="font-medium">{{ t.name }}</td>
                 <td>
                   <span :class="t.is_active ? 'badge-success' : 'badge-neutral'">
@@ -89,7 +89,7 @@
                   <button class="btn-ghost btn-sm" @click="$router.push(`/instances/${t.id}`)">实例</button>
                 </td>
               </tr>
-              <tr v-if="tenants.length === 0">
+              <tr v-if="tenants.filter(x => x.is_active).length === 0">
                 <td colspan="3" class="text-center text-surface-400 py-8">暂无账户</td>
               </tr>
             </tbody>
@@ -119,7 +119,7 @@ const IconCheck = { render: () => h('svg', { fill: 'none', stroke: 'currentColor
 const IconX = { render: () => h('svg', { fill: 'none', stroke: 'currentColor', viewBox: '0 0 24 24' }, [h('path', { 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'stroke-width': '2', d: 'M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z' })]) }
 
 const stats = computed(() => [
-  { label: '云账户数', value: tenants.value.length, icon: IconBuilding, bgClass: 'bg-primary-100 dark:bg-primary-900/30', iconClass: 'text-primary-600 dark:text-primary-400' },
+  { label: '云账户数', value: tenants.value.filter(t => t.is_active).length, icon: IconBuilding, bgClass: 'bg-primary-100 dark:bg-primary-900/30', iconClass: 'text-primary-600 dark:text-primary-400' },
   { label: '运行中任务', value: tasks.value.filter(t => t.status === 'running').length, icon: IconBolt, bgClass: 'bg-emerald-100 dark:bg-emerald-900/30', iconClass: 'text-emerald-600 dark:text-emerald-400' },
   { label: '成功抢机', value: tasks.value.filter(t => t.status === 'success').length, icon: IconCheck, bgClass: 'bg-amber-100 dark:bg-amber-900/30', iconClass: 'text-amber-600 dark:text-amber-400' },
   { label: '失败任务', value: tasks.value.filter(t => t.status === 'failed').length, icon: IconX, bgClass: 'bg-red-100 dark:bg-red-900/30', iconClass: 'text-red-600 dark:text-red-400' },

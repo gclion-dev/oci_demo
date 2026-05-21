@@ -66,9 +66,10 @@
               </td>
               <td class="font-mono text-xs max-w-[200px] truncate" :title="row.tenancy_ocid">{{ row.tenancy_ocid }}</td>
               <td>
-                <span :class="row.is_active ? 'badge-success' : 'badge-neutral'">
-                  {{ row.is_active ? '启用' : '禁用' }}
-                </span>
+                <label class="toggle-switch">
+                  <input type="checkbox" :checked="row.is_active" @change="toggleActive(row)" />
+                  <span class="toggle-slider"></span>
+                </label>
               </td>
               <td class="whitespace-nowrap">{{ formatDate(row.created_at) }}</td>
               <td class="whitespace-nowrap">
@@ -575,6 +576,17 @@ async function deleteTenantById(id: number) {
   if (row) await deleteTenant(row)
 }
 
+async function toggleActive(row: Tenant) {
+  const newStatus = !row.is_active
+  try {
+    await api.put(`/tenants/${row.id}`, { is_active: newStatus })
+    row.is_active = newStatus
+    success(newStatus ? '已启用' : '已禁用')
+  } catch {
+    error('状态切换失败')
+  }
+}
+
 async function testConn(row: Tenant) {
   const { info } = useToast()
   info('正在测试连接（遍历所有区域）...')
@@ -605,5 +617,44 @@ async function loadRegions() {
 <style scoped>
 .dropdown-item {
   @apply w-full text-left px-3 py-2 text-sm text-surface-700 dark:text-surface-300 hover:bg-surface-100 dark:hover:bg-surface-700 transition-colors;
+}
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  border-radius: 20px;
+  transition: 0.3s;
+}
+.toggle-slider::before {
+  content: "";
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+.toggle-switch input:checked + .toggle-slider {
+  background-color: #10b981;
+}
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(16px);
 }
 </style>

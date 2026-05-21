@@ -48,6 +48,8 @@ async def create_task(
     current_user: models.User = Depends(get_current_user),
 ):
     tenant = await _get_tenant(data.tenant_id, db, current_user)
+    if not tenant.is_active:
+        raise HTTPException(status_code=400, detail="该租户已禁用，无法创建任务")
     task_data = data.model_dump()
     # 如果未提供 SSH 公钥，使用用户的默认公钥
     if not task_data.get("ssh_public_key"):

@@ -268,13 +268,13 @@ async def load_from_oci(
     # 获取当前用户的所有租户
     if current_user.is_admin:
         result = await db.execute(
-            select(models.Tenant).options(selectinload(models.Tenant.regions))
+            select(models.Tenant).where(models.Tenant.is_active == True).options(selectinload(models.Tenant.regions))
         )
     else:
         result = await db.execute(
             select(models.Tenant)
             .options(selectinload(models.Tenant.regions))
-            .where(models.Tenant.owner_id == current_user.id)
+            .where(models.Tenant.owner_id == current_user.id, models.Tenant.is_active == True)
         )
     tenants = result.scalars().all()
 
