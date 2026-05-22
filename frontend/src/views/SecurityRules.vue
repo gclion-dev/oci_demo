@@ -31,12 +31,12 @@
           <div class="flex gap-0 shrink-0">
             <button
               class="px-3 py-1.5 text-sm font-medium rounded-l-lg border transition-colors"
-              :class="ruleType === 0 ? 'bg-primary-600 text-white border-primary-600' : 'bg-white dark:bg-surface-800 text-surface-600 dark:text-surface-400 border-surface-300 dark:border-surface-600'"
+              :class="ruleType === 0 ? 'bg-primary-600 text-white border-primary-600' : 'bg-[#f7f4ef] dark:bg-surface-800 text-surface-600 dark:text-surface-400 border-surface-300 dark:border-surface-600'"
               @click="ruleType = 0; loadRules()"
             >入站规则</button>
             <button
               class="px-3 py-1.5 text-sm font-medium rounded-r-lg border border-l-0 transition-colors"
-              :class="ruleType === 1 ? 'bg-primary-600 text-white border-primary-600' : 'bg-white dark:bg-surface-800 text-surface-600 dark:text-surface-400 border-surface-300 dark:border-surface-600'"
+              :class="ruleType === 1 ? 'bg-primary-600 text-white border-primary-600' : 'bg-[#f7f4ef] dark:bg-surface-800 text-surface-600 dark:text-surface-400 border-surface-300 dark:border-surface-600'"
               @click="ruleType = 1; loadRules()"
             >出站规则</button>
           </div>

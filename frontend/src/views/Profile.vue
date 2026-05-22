@@ -108,6 +108,109 @@
         <button type="submit" class="btn-primary" :disabled="pwdSaving">修改密码</button>
       </form>
     </div>
+
+    <!-- SSH Credentials Management -->
+    <div class="card p-6 space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center">
+            <svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h3 class="font-semibold text-surface-900 dark:text-white">SSH 凭据管理</h3>
+        </div>
+        <button class="btn-primary btn-sm" @click="openCredAdd">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+          添加凭据
+        </button>
+      </div>
+
+      <p class="text-sm text-surface-500 dark:text-surface-400">管理 SSH 连接时保存的凭据，可在实例管理中快速选择使用。</p>
+
+      <div v-if="sshCreds.length === 0" class="text-center text-surface-400 py-6">暂无已保存的凭据</div>
+
+      <div v-else class="table-container">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>标签</th>
+              <th>主机</th>
+              <th>端口</th>
+              <th>用户名</th>
+              <th>认证方式</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="cred in sshCreds" :key="cred.id">
+              <td class="font-medium">{{ cred.label }}</td>
+              <td class="font-mono text-xs">{{ cred.host }}</td>
+              <td>{{ cred.port }}</td>
+              <td>{{ cred.username }}</td>
+              <td>
+                <span :class="cred.auth_type === 'key' ? 'badge-info' : 'badge-neutral'">
+                  {{ cred.auth_type === 'key' ? '私钥' : '密码' }}
+                </span>
+              </td>
+              <td>
+                <div class="flex items-center gap-1">
+                  <button class="btn-ghost btn-sm" @click="openCredEdit(cred)">编辑</button>
+                  <button class="btn-ghost btn-sm text-red-600 dark:text-red-400" @click="deleteCred(cred)">删除</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- SSH Credential Add/Edit Modal -->
+    <Modal :visible="credDialogVisible" :title="credEditId ? '编辑凭据' : '添加凭据'" width="480px" @close="credDialogVisible = false">
+      <div class="space-y-4">
+        <div>
+          <label class="label">标签</label>
+          <input v-model="credForm.label" class="input" placeholder="如：我的VPS" />
+        </div>
+        <div>
+          <label class="label">主机</label>
+          <input v-model="credForm.host" class="input" placeholder="IP 或域名" />
+        </div>
+        <div>
+          <label class="label">端口</label>
+          <input v-model.number="credForm.port" type="number" class="input" min="1" max="65535" />
+        </div>
+        <div>
+          <label class="label">用户名</label>
+          <input v-model="credForm.username" class="input" placeholder="root" />
+        </div>
+        <div>
+          <label class="label">认证方式</label>
+          <div class="flex gap-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" v-model="credForm.auth_type" value="password" class="accent-primary-600" /> 密码
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="radio" v-model="credForm.auth_type" value="key" class="accent-primary-600" /> 私钥
+            </label>
+          </div>
+        </div>
+        <div v-if="credForm.auth_type === 'password'">
+          <label class="label">密码</label>
+          <input v-model="credForm.password" type="password" class="input" :placeholder="credEditId ? '留空则不修改' : '输入密码'" />
+        </div>
+        <div v-if="credForm.auth_type === 'key'">
+          <label class="label">私钥</label>
+          <textarea v-model="credForm.private_key" class="input" rows="5" :placeholder="credEditId ? '留空则不修改' : '粘贴 SSH 私钥内容'"></textarea>
+        </div>
+      </div>
+      <template #footer>
+        <button class="btn-secondary" @click="credDialogVisible = false">取消</button>
+        <button class="btn-primary" :disabled="credSaving" @click="saveCred">
+          {{ credSaving ? '保存中...' : '保存' }}
+        </button>
+      </template>
+    </Modal>
   </div>
 </template>
 
@@ -115,6 +218,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useToast } from '@/composables/useToast'
 import { useModal } from '@/composables/useModal'
+import Modal from '@/components/Modal.vue'
 import api from '@/api'
 
 const { success, warning, error } = useToast()
@@ -229,5 +333,85 @@ async function changePassword() {
   } finally { pwdSaving.value = false }
 }
 
-onMounted(() => { loadKeyStatus(); loadSSHKeyStatus() })
+// ── SSH Credentials Management ───────────────────────────────────────────────
+const sshCreds = ref<any[]>([])
+const credDialogVisible = ref(false)
+const credEditId = ref<number | null>(null)
+const credSaving = ref(false)
+const credForm = reactive({
+  label: '',
+  host: '',
+  port: 22,
+  username: 'root',
+  auth_type: 'password',
+  password: '',
+  private_key: '',
+})
+
+async function loadSSHCreds() {
+  try {
+    const res = await api.get('/ssh-credentials')
+    sshCreds.value = res.data
+  } catch { /* ignore */ }
+}
+
+function openCredAdd() {
+  credEditId.value = null
+  Object.assign(credForm, { label: '', host: '', port: 22, username: 'root', auth_type: 'password', password: '', private_key: '' })
+  credDialogVisible.value = true
+}
+
+async function openCredEdit(cred: any) {
+  credEditId.value = cred.id
+  // Load secret to pre-fill
+  try {
+    const res = await api.get(`/ssh-credentials/${cred.id}/secret`)
+    Object.assign(credForm, {
+      label: cred.label,
+      host: res.data.host,
+      port: res.data.port,
+      username: res.data.username,
+      auth_type: res.data.auth_type,
+      password: res.data.password || '',
+      private_key: res.data.private_key || '',
+    })
+  } catch {
+    Object.assign(credForm, { label: cred.label, host: cred.host, port: cred.port, username: cred.username, auth_type: cred.auth_type, password: '', private_key: '' })
+  }
+  credDialogVisible.value = true
+}
+
+async function saveCred() {
+  if (!credForm.label.trim()) { warning('请输入标签'); return }
+  if (!credForm.host.trim()) { warning('请输入主机地址'); return }
+  if (!credForm.username.trim()) { warning('请输入用户名'); return }
+
+  credSaving.value = true
+  try {
+    if (credEditId.value) {
+      const payload: any = { label: credForm.label, host: credForm.host, port: credForm.port, username: credForm.username, auth_type: credForm.auth_type }
+      if (credForm.auth_type === 'password' && credForm.password) payload.password = credForm.password
+      if (credForm.auth_type === 'key' && credForm.private_key) payload.private_key = credForm.private_key
+      await api.put(`/ssh-credentials/${credEditId.value}`, payload)
+      success('凭据已更新')
+    } else {
+      if (credForm.auth_type === 'password' && !credForm.password) { warning('请输入密码'); credSaving.value = false; return }
+      if (credForm.auth_type === 'key' && !credForm.private_key) { warning('请输入私钥'); credSaving.value = false; return }
+      await api.post('/ssh-credentials', credForm)
+      success('凭据已添加')
+    }
+    credDialogVisible.value = false
+    loadSSHCreds()
+  } finally { credSaving.value = false }
+}
+
+async function deleteCred(cred: any) {
+  const ok = await confirm(`确认删除凭据「${cred.label}」？`, '警告', { type: 'warning' })
+  if (!ok) return
+  await api.delete(`/ssh-credentials/${cred.id}`)
+  success('删除成功')
+  loadSSHCreds()
+}
+
+onMounted(() => { loadKeyStatus(); loadSSHKeyStatus(); loadSSHCreds() })
 </script>

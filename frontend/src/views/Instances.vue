@@ -62,7 +62,7 @@
     <!-- Dropdown menu (teleported to avoid overflow clipping) -->
     <Teleport to="body">
       <div v-if="openInstDropdownId !== null" class="fixed inset-0 z-[8000]" @click="openInstDropdownId = null">
-        <div class="fixed w-44 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg shadow-lg py-1 z-[8001]" :style="dropdownStyle" @click.stop>
+        <div ref="dropdownMenuRef" class="fixed w-44 bg-[#f7f4ef] dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg shadow-lg py-1 z-[8001]" :style="dropdownStyle" @click.stop>
           <button class="dropdown-item" @click="handleDropdownAction('config')">更改配置</button>
           <button class="dropdown-item" :disabled="dropdownInst?.lifecycle_state !== 'RUNNING'" @click="handleDropdownAction('vnc')">VNC 控制台</button>
           <button class="dropdown-item" :disabled="dropdownInst?.lifecycle_state !== 'RUNNING'" @click="handleDropdownAction('ipv6')">附加 IPv6</button>
@@ -229,7 +229,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import api from '@/api'
 import { useToast } from '@/composables/useToast'
@@ -284,6 +284,7 @@ function isAmdShape(shape: string) {
 const openInstDropdownId = ref<string | null>(null)
 const dropdownStyle = ref({ top: '0px', left: '0px' })
 const dropdownInst = ref<any>(null)
+const dropdownMenuRef = ref<HTMLElement | null>(null)
 
 function toggleInstDropdown(id: string) {
   if (openInstDropdownId.value === id) {
@@ -294,14 +295,26 @@ function toggleInstDropdown(id: string) {
   dropdownInst.value = instances.value.find(i => i.id === id) || null
   // Position the dropdown near the button
   const btn = document.querySelector(`[data-dropdown-id="${id}"]`) as HTMLElement
-  if (btn) {
-    const rect = btn.getBoundingClientRect()
-    dropdownStyle.value = {
-      top: `${rect.bottom + 4}px`,
-      left: `${rect.right - 176}px`,
-    }
+  if (!btn) return
+  const rect = btn.getBoundingClientRect()
+  // Initially place below
+  dropdownStyle.value = {
+    top: `${rect.bottom + 4}px`,
+    left: `${rect.right - 176}px`,
   }
   openInstDropdownId.value = id
+
+  // After render, check if menu overflows and flip above if needed
+  nextTick(() => {
+    if (!dropdownMenuRef.value) return
+    const menuRect = dropdownMenuRef.value.getBoundingClientRect()
+    if (menuRect.bottom > window.innerHeight) {
+      dropdownStyle.value = {
+        top: `${rect.top - menuRect.height - 4}px`,
+        left: `${rect.right - 176}px`,
+      }
+    }
+  })
 }
 
 function handleDropdownAction(action: string) {

@@ -91,7 +91,7 @@
               <th>运营商</th>
               <th>ASN</th>
               <th>类型</th>
-              <th>操作</th>
+              <th class="sticky right-0 bg-surface-50 dark:bg-surface-900 border-l border-surface-200 dark:border-surface-700">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -109,10 +109,10 @@
                   {{ row.ip_type === 'oracle' ? 'OCI' : '手动' }}
                 </span>
               </td>
-              <td>
+              <td class="whitespace-nowrap sticky right-0 bg-[#f7f4ef] dark:bg-surface-800 border-l border-surface-200 dark:border-surface-700">
                 <div class="flex items-center gap-1">
-                  <button class="btn-ghost btn-sm" @click="doRefresh(row)">刷新</button>
-                  <button class="btn-ghost btn-sm text-red-600" @click="doRemove([row.id])">删除</button>
+                  <button class="btn-sm whitespace-nowrap bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-300 dark:hover:bg-primary-900/50 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors" @click="doRefresh(row)">刷新</button>
+                  <button class="btn-sm whitespace-nowrap bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-900/30 dark:text-red-400 dark:hover:bg-red-900/50 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors" @click="doRemove([row.id])">删除</button>
                 </div>
               </td>
             </tr>
@@ -203,7 +203,7 @@ function updateMarkers() {
   for (const p of mapPoints.value) {
     if (p.lat == null || p.lng == null) continue
     const marker = L.circleMarker([p.lat, p.lng], { radius: 8, fillColor: '#3b82f6', color: '#fff', weight: 2, opacity: 1, fillOpacity: 0.8 })
-    marker.bindPopup(`<b>${p.tenant_name || ''}</b>${p.tenant_name ? '<br/>' : ''}<b>${p.ip}</b><br/>${p.city || ''}, ${p.country || ''}<br/>${p.org || ''}`)
+    marker.bindPopup(`<b>${p.tenant_name || ''}</b>${p.tenant_name ? '<br/>' : ''}<b>${p.ip}</b><br/>${p.city || ''}, ${p.country || ''}<br/>${p.org || ''}<br/><a href="https://www.itdog.cn/ping/${p.ip}" target="_blank" style="display:inline-block;margin-top:6px;padding:2px 10px;background:#409EFF;color:#fff;border-radius:4px;text-decoration:none;font-size:12px;">测 Ping</a>`)
     markersLayer.addLayer(marker)
   }
   if (mapPoints.value.length > 0) {

@@ -3,7 +3,7 @@
     <Transition name="modal">
       <div v-if="visible" class="fixed inset-0 z-[9000] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="$emit('close')"></div>
-        <div class="relative w-full bg-white dark:bg-surface-800 rounded-2xl shadow-2xl border border-surface-200 dark:border-surface-700 overflow-hidden" :style="{ maxWidth: width }">
+        <div class="relative w-full bg-[#f7f4ef] dark:bg-surface-800 rounded-2xl shadow-2xl border border-surface-200 dark:border-surface-700 overflow-hidden" :style="{ maxWidth: width }">
           <!-- Header -->
           <div class="flex items-center justify-between px-6 py-4 border-b border-surface-200 dark:border-surface-700">
             <h3 class="text-lg font-semibold text-surface-900 dark:text-surface-100">{{ title }}</h3>

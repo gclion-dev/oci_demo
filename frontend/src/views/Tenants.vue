@@ -54,7 +54,7 @@
               <th>Tenancy OCID</th>
               <th>状态</th>
               <th>创建时间</th>
-              <th>操作</th>
+              <th class="sticky right-0 bg-surface-50 dark:bg-surface-900 border-l border-surface-200 dark:border-surface-700 text-center">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -78,14 +78,12 @@
                 </span>
               </td>
               <td class="whitespace-nowrap">{{ formatDate(row.created_at) }}</td>
-              <td class="whitespace-nowrap">
-                <div class="flex items-center gap-1">
-                  <button class="btn-ghost btn-sm whitespace-nowrap" :disabled="!row.is_active" @click="$router.push(`/instances/${row.id}`)">实例</button>
-                  <button class="btn-ghost btn-sm whitespace-nowrap" @click="testConn(row)">测试</button>
-                  <button class="btn-ghost btn-sm whitespace-nowrap" @click="openEdit(row)">编辑</button>
-                  <div class="relative">
-                    <button class="btn-ghost btn-sm whitespace-nowrap" :disabled="!row.is_active" @click="toggleDropdown($event, row.id)">更多 ▾</button>
-                  </div>
+              <td class="whitespace-nowrap sticky right-0 bg-[#f7f4ef] dark:bg-surface-800 border-l border-surface-200 dark:border-surface-700">
+                <div class="flex items-center justify-evenly">
+                  <button class="btn-sm whitespace-nowrap bg-primary-50 text-primary-700 hover:bg-primary-100 dark:bg-primary-900/30 dark:text-primary-300 dark:hover:bg-primary-900/50 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors" :disabled="!row.is_active" @click="$router.push(`/instances/${row.id}`)">实例</button>
+                  <button class="btn-sm whitespace-nowrap bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300 dark:hover:bg-emerald-900/50 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors" @click="testConn(row)">测试</button>
+                  <button class="btn-sm whitespace-nowrap bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/50 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors" @click="openEdit(row)">编辑</button>
+                  <button class="btn-sm whitespace-nowrap bg-surface-100 text-surface-700 hover:bg-surface-200 dark:bg-surface-700 dark:text-surface-300 dark:hover:bg-surface-600 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors" :disabled="!row.is_active" @click="toggleDropdown($event, row.id)">更多 ▾</button>
                 </div>
               </td>
             </tr>
@@ -100,7 +98,7 @@
     <!-- Dropdown menu (teleported to avoid overflow clipping) -->
     <Teleport to="body">
       <div v-if="openDropdownId !== null" class="fixed inset-0 z-[8000]" @click="openDropdownId = null">
-        <div class="fixed w-44 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg shadow-lg py-1" :style="dropdownStyle" @click.stop>
+        <div ref="tenantDropdownRef" class="fixed w-44 bg-[#f7f4ef] dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg shadow-lg py-1" :style="dropdownStyle" @click.stop>
           <button class="dropdown-item" @click="navigateTo(`/security-rules/${openDropdownId}`)">安全列表</button>
           <button class="dropdown-item" @click="navigateTo(`/traffic/${openDropdownId}`)">流量统计</button>
           <button class="dropdown-item" @click="navigateTo(`/boot-volumes/${openDropdownId}`)">引导卷</button>
@@ -230,7 +228,7 @@ key_file=xxx.pem"></textarea>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/api'
 import { useToast } from '@/composables/useToast'
@@ -322,6 +320,7 @@ const filteredTenants = computed(() => {
 // ── Dropdown ─────────────────────────────────────────────────────────────────
 const openDropdownId = ref<number | null>(null)
 const dropdownStyle = ref({ top: '0px', left: '0px' })
+const tenantDropdownRef = ref<HTMLElement | null>(null)
 
 function toggleDropdown(event: MouseEvent, id: number) {
   if (openDropdownId.value === id) {
@@ -330,11 +329,24 @@ function toggleDropdown(event: MouseEvent, id: number) {
   }
   const btn = event.currentTarget as HTMLElement
   const rect = btn.getBoundingClientRect()
+  // Initially place below
   dropdownStyle.value = {
     top: `${rect.bottom + 4}px`,
-    left: `${rect.right - 176}px`, // 176 = w-44 = 11rem
+    left: `${rect.right - 176}px`,
   }
   openDropdownId.value = id
+
+  // After render, flip above if overflows
+  nextTick(() => {
+    if (!tenantDropdownRef.value) return
+    const menuRect = tenantDropdownRef.value.getBoundingClientRect()
+    if (menuRect.bottom > window.innerHeight) {
+      dropdownStyle.value = {
+        top: `${rect.top - menuRect.height - 4}px`,
+        left: `${rect.right - 176}px`,
+      }
+    }
+  })
 }
 
 function navigateTo(path: string) {

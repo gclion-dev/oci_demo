@@ -2,7 +2,7 @@
   <div class="flex h-screen overflow-hidden bg-surface-50 dark:bg-surface-950">
     <!-- Sidebar -->
     <aside
-      class="flex flex-col border-r border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-900 transition-all duration-300"
+      class="flex flex-col border-r border-surface-200 dark:border-surface-800 bg-[#f7f4ef] dark:bg-surface-900 transition-all duration-300"
       :class="collapsed ? 'w-16' : 'w-56'"
     >
       <!-- Logo -->
@@ -65,7 +65,7 @@
     <!-- Main area -->
     <div class="flex-1 flex flex-col overflow-hidden">
       <!-- Header -->
-      <header class="flex items-center justify-between h-16 px-6 border-b border-surface-200 dark:border-surface-800 bg-white dark:bg-surface-900 shrink-0">
+      <header class="flex items-center justify-between h-16 px-6 border-b border-surface-200 dark:border-surface-800 bg-[#f7f4ef] dark:bg-surface-900 shrink-0">
         <div class="flex items-center gap-2 text-sm text-surface-500 dark:text-surface-400">
           <router-link to="/dashboard" class="hover:text-primary-600 dark:hover:text-primary-400 transition-colors">首页</router-link>
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>

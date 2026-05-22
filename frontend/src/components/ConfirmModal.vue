@@ -3,7 +3,7 @@
     <Transition name="modal">
       <div v-if="confirmState.visible" class="fixed inset-0 z-[9500] flex items-center justify-center p-4">
         <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" @click="handleCancel"></div>
-        <div class="relative w-full max-w-md bg-white dark:bg-surface-800 rounded-2xl shadow-2xl border border-surface-200 dark:border-surface-700 p-6">
+        <div class="relative w-full max-w-md bg-[#f7f4ef] dark:bg-surface-800 rounded-2xl shadow-2xl border border-surface-200 dark:border-surface-700 p-6">
           <div class="flex items-start gap-4">
             <div class="shrink-0 w-10 h-10 rounded-full flex items-center justify-center" :class="iconBg">
               <svg v-if="confirmState.type === 'warning'" class="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
