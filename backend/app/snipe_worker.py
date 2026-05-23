@@ -75,22 +75,51 @@ def _run_snipe(task_id: int, tenant_data: dict, task_data: dict, db_url: str):
         ads = [ad.name for ad in identity.list_availability_domains(compartment_id=compartment_id).data]
         _append_log(log_lines, f"可用域: {ads}")
 
-        # Get image
+        # Get image — 动态匹配最新的 Ubuntu 镜像
         images = compute.list_images(compartment_id=compartment_id, shape=shape_name).data
         image_id = None
-        preferred = ["Canonical-Ubuntu-20.04-2024.08.26-0", "Canonical-Ubuntu-20.04-aarch64-2024.08.26-0"]
+
+        # 根据架构确定镜像名前缀
+        is_arm = "a1" in shape_name.lower() or "arm" in shape_name.lower()
+        ubuntu_prefix = "Canonical-Ubuntu-" if not is_arm else "Canonical-Ubuntu-"
+        ubuntu_suffix = "-aarch64-" if is_arm else "-"
+
+        # 收集所有 Ubuntu 镜像（排除 Minimal / STIG 等特殊版本）
+        ubuntu_candidates = []
         for img in images:
-            if img.display_name in preferred:
-                image_id = img.id
-                break
-        if not image_id and images:
-            image_id = images[0].id
+            name = img.display_name or ""
+            if not name.startswith("Canonical-Ubuntu-"):
+                continue
+            # 排除 Minimal 和其他特殊版本
+            if "Minimal" in name or "STIG" in name:
+                continue
+            # ARM 架构只选 aarch64 镜像，x86 排除 aarch64
+            if is_arm and "aarch64" not in name:
+                continue
+            if not is_arm and "aarch64" in name:
+                continue
+            ubuntu_candidates.append(img)
+
+        if ubuntu_candidates:
+            # 按 time_created 降序排列，选最新的
+            ubuntu_candidates.sort(key=lambda x: x.time_created or "", reverse=True)
+            image_id = ubuntu_candidates[0].id
+            _append_log(log_lines, f"选中 Ubuntu 镜像: {ubuntu_candidates[0].display_name}")
+        else:
+            # 没有 Ubuntu，尝试找普通 Oracle Linux（排除 STIG）
+            for img in images:
+                name = (img.display_name or "").lower()
+                if "oracle" in name and "stig" not in name:
+                    image_id = img.id
+                    _append_log(log_lines, f"未找到 Ubuntu，使用 Oracle Linux: {img.display_name}")
+                    break
+
         if not image_id:
-            _append_log(log_lines, "ERROR: 未找到合适镜像，任务终止")
+            _append_log(log_lines, "ERROR: 未找到合适镜像（无 Ubuntu 或 Oracle Linux），任务终止")
             _update_task_db(db_url, task_id, "failed", "\n".join(log_lines))
             return
 
-        _append_log(log_lines, f"使用镜像: {image_id}")
+        _append_log(log_lines, f"使用镜像 ID: {image_id}")
 
         # Get subnet
         subnets = network.list_subnets(compartment_id=compartment_id).data
@@ -179,8 +208,17 @@ def _run_snipe(task_id: int, tenant_data: dict, task_data: dict, db_url: str):
             result_instance_id, result_ip
         )
 
-        # Notify
-        _notify_result(db_url, task_id, tenant_data, final_status, result_ip, attempt)
+        # Notify — 传入更多实例信息用于通知
+        instance_info = {
+            "region": config["region"],
+            "shape": shape_name,
+            "ocpus": ocpus,
+            "memory_in_gbs": memory,
+            "boot_volume_size_in_gbs": boot_vol,
+            "image_name": next((img.display_name for img in images if img.id == image_id), image_id),
+            "availability_domain": request.availability_domain if success else None,
+        }
+        _notify_result(db_url, task_id, tenant_data, final_status, result_ip, attempt, instance_info)
 
     finally:
         try:
@@ -220,12 +258,12 @@ def _update_task_db(db_url, task_id, status, log, attempt=0, instance_id=None, i
         logger.error(f"写回数据库失败: {e}")
 
 
-def _notify_result(db_url, task_id, tenant_data, status, ip, attempt):
+def _notify_result(db_url, task_id, tenant_data, status, ip, attempt, instance_info=None):
     """任务完成后发送通知"""
     try:
         from sqlalchemy import create_engine, select
         from sqlalchemy.orm import Session
-        from app.models import NotifyConfig, Tenant
+        from app.models import NotifyConfig, Tenant, SnipeTask
         from app.notify import send_email, send_wecom
         from app.config import settings
 
@@ -235,6 +273,7 @@ def _notify_result(db_url, task_id, tenant_data, status, ip, attempt):
             tenant = session.get(Tenant, tenant_data["id"])
             if not tenant:
                 return
+            task = session.get(SnipeTask, task_id)
             configs = session.execute(
                 select(NotifyConfig).where(
                     NotifyConfig.owner_id == tenant.owner_id,
@@ -242,12 +281,48 @@ def _notify_result(db_url, task_id, tenant_data, status, ip, attempt):
                 )
             ).scalars().all()
 
+            # 计算抢机时长
+            duration = ""
+            if task and task.created_at:
+                elapsed = datetime.datetime.utcnow() - task.created_at
+                hours, remainder = divmod(int(elapsed.total_seconds()), 3600)
+                minutes, seconds = divmod(remainder, 60)
+                if hours > 0:
+                    duration = f"{hours}小时{minutes}分{seconds}秒"
+                elif minutes > 0:
+                    duration = f"{minutes}分{seconds}秒"
+                else:
+                    duration = f"{seconds}秒"
+
             if status == "success":
                 subject = f"✅ 抢机成功！租户: {tenant_data['name']}"
-                body = f"租户: {tenant_data['name']}\n任务ID: {task_id}\n公网IP: {ip}\n尝试次数: {attempt}"
+                info = instance_info or {}
+                body = (
+                    f"🎉 抢机成功 🎉\n\n"
+                    f"租户: {tenant_data['name']}\n"
+                    f"任务ID: {task_id}\n"
+                    f"时间: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
+                    f"Region: {info.get('region', '未知')}\n"
+                    f"可用域: {info.get('availability_domain', '未知')}\n"
+                    f"CPU类型: {'ARM' if 'a1' in info.get('shape', '').lower() else 'AMD/x86'}\n"
+                    f"Shape: {info.get('shape', '未知')}\n"
+                    f"CPU: {info.get('ocpus', '未知')} 核\n"
+                    f"内存: {info.get('memory_in_gbs', '未知')} GB\n"
+                    f"磁盘: {info.get('boot_volume_size_in_gbs', '未知')} GB\n"
+                    f"镜像: {info.get('image_name', '未知')}\n"
+                    f"公网IP: {ip or '未分配'}\n"
+                    f"尝试次数: {attempt}\n"
+                    f"抢机时长: {duration or '未知'}"
+                )
             else:
                 subject = f"❌ 抢机{status}！租户: {tenant_data['name']}"
-                body = f"租户: {tenant_data['name']}\n任务ID: {task_id}\n状态: {status}\n尝试次数: {attempt}"
+                body = (
+                    f"租户: {tenant_data['name']}\n"
+                    f"任务ID: {task_id}\n"
+                    f"状态: {status}\n"
+                    f"尝试次数: {attempt}\n"
+                    f"抢机时长: {duration or '未知'}"
+                )
 
             for cfg in configs:
                 if cfg.notify_type == "email" and cfg.sender_email:
