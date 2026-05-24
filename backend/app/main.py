@@ -17,7 +17,7 @@ from app.database import init_db, AsyncSessionLocal
 from app import models
 from app.auth import hash_password
 from app.config import settings
-from app.routers import auth, users, tenants, instances, snipe, bills, notify, regions, oci_users, terminal, ssh_credentials, security_rules, traffic, boot_volumes, vcn, limits, network_features, ip_data, console_connection, cloudflare
+from app.routers import auth, users, tenants, instances, snipe, bills, notify, regions, oci_users, terminal, terminal_monitor, ssh_credentials, security_rules, traffic, boot_volumes, vcn, limits, network_features, ip_data, console_connection, cloudflare, quick_commands
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +79,9 @@ async def lifespan(app: FastAPI):
             ))
             await db.execute(text(
                 "ALTER TABLE snipe_tasks ADD COLUMN IF NOT EXISTS region VARCHAR(64)"
+            ))
+            await db.execute(text(
+                "ALTER TABLE quick_commands ADD COLUMN IF NOT EXISTS category VARCHAR(64) DEFAULT '默认分类'"
             ))
             await db.commit()
         except Exception:
@@ -186,6 +189,7 @@ app.include_router(notify.router)
 app.include_router(regions.router)
 app.include_router(oci_users.router)
 app.include_router(terminal.router)
+app.include_router(terminal_monitor.router)
 app.include_router(ssh_credentials.router)
 app.include_router(security_rules.router)
 app.include_router(traffic.router)
@@ -196,6 +200,7 @@ app.include_router(network_features.router)
 app.include_router(ip_data.router)
 app.include_router(console_connection.router)
 app.include_router(cloudflare.router)
+app.include_router(quick_commands.router)
 
 
 @app.get("/api/health")

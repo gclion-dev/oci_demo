@@ -45,7 +45,7 @@ async def do_instance_action(
     current_user: models.User = Depends(get_current_user),
 ):
     tenant = await _get_tenant(tenant_id, db, current_user)
-    allowed = {"START", "STOP", "RESET", "SOFTSTOP"}
+    allowed = {"START", "STOP", "RESET", "SOFTSTOP", "SOFTRESET"}
     if data.action.upper() not in allowed:
         raise HTTPException(status_code=400, detail=f"不支持的操作，允许: {allowed}")
     try:

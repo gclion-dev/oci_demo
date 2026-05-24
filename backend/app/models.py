@@ -158,3 +158,15 @@ class CloudflareCfg(Base):
     zone_id = Column(String(128), nullable=False)       # CF Zone ID
     domain = Column(String(256), nullable=True)         # 域名（可选，方便展示）
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class QuickCommand(Base):
+    """快捷命令（所有机器共享）"""
+    __tablename__ = "quick_commands"
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    category = Column(String(64), nullable=False, default="默认分类")  # 命令分类
+    name = Column(String(128), nullable=False)          # 按钮显示名称
+    command = Column(Text, nullable=False)              # 实际执行的命令
+    sort_order = Column(Integer, default=0)            # 排序
+    created_at = Column(DateTime, default=datetime.utcnow)

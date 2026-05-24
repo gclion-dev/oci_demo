@@ -29,8 +29,12 @@ const routes = [
       { path: 'notify', name: 'Notify', component: () => import('@/views/Notify.vue') },
       { path: 'users', name: 'Users', component: () => import('@/views/Users.vue') },
       { path: 'profile', name: 'Profile', component: () => import('@/views/Profile.vue') },
-      { path: 'terminal', name: 'Terminal', component: () => import('@/views/Terminal.vue') },
     ],
+  },
+  {
+    path: '/terminal',
+    name: 'Terminal',
+    component: () => import('@/views/Terminal.vue'),
   },
 ]
 

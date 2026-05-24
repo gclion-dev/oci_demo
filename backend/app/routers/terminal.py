@@ -212,3 +212,126 @@ async def websocket_ssh(
             await websocket.close()
         except Exception:
             pass
+
+
+@router.websocket("/ws/console")
+async def websocket_console_ssh(
+    websocket: WebSocket,
+    token: str = Query(default=""),
+):
+    """
+    WebSocket Console SSH 终端（用于 OCI 串行控制台）
+    通过系统 SSH 命令 + ProxyCommand 连接，因为 Paramiko 不支持 ProxyCommand。
+    前端发送第一条消息包含 ssh_connection_string 和 private_key。
+    """
+    import tempfile
+    import os
+
+    await websocket.accept()
+
+    user = await _authenticate_ws(token)
+    if not user:
+        await websocket.send_text("\r\n\x1b[31m认证失败，请重新登录\x1b[0m\r\n")
+        await websocket.close()
+        return
+
+    # 等待前端发送连接信息
+    try:
+        auth_msg = await asyncio.wait_for(websocket.receive_text(), timeout=30)
+        auth_data = json.loads(auth_msg)
+    except asyncio.TimeoutError:
+        await websocket.send_text("\r\n\x1b[31m等待连接信息超时\x1b[0m\r\n")
+        await websocket.close()
+        return
+    except Exception:
+        await websocket.send_text("\r\n\x1b[31m连接信息格式错误\x1b[0m\r\n")
+        await websocket.close()
+        return
+
+    ssh_connection_string = auth_data.get("ssh_connection_string", "")
+    private_key = auth_data.get("private_key", "")
+
+    if not ssh_connection_string or not private_key:
+        await websocket.send_text("\r\n\x1b[31m缺少连接字符串或私钥\x1b[0m\r\n")
+        await websocket.close()
+        return
+
+    # 将私钥写入临时文件
+    key_file = tempfile.NamedTemporaryFile(mode='w', suffix='.pem', delete=False)
+    key_file.write(private_key)
+    key_file.close()
+    os.chmod(key_file.name, 0o600)
+
+    # 修改 SSH 命令：替换密钥路径，添加必要参数
+    # OCI 的 ssh_connection_string 格式:
+    # ssh -o ProxyCommand='ssh -W %h:%p -p 443 ocid1...' ocid1.instance...
+    # 需要加上 -i key_file -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+    ssh_cmd = ssh_connection_string.strip()
+    # 在 ssh 后面插入参数
+    if ssh_cmd.startswith("ssh "):
+        extra_opts = (
+            f"-tt -i {key_file.name} "
+            "-o StrictHostKeyChecking=no "
+            "-o UserKnownHostsFile=/dev/null "
+            "-o HostKeyAlgorithms=+ssh-rsa "
+            "-o PubkeyAcceptedAlgorithms=+ssh-rsa "
+        )
+        ssh_cmd = "ssh " + extra_opts + ssh_cmd[4:]
+        # ProxyCommand 里的 ssh 也需要加参数
+        ssh_cmd = ssh_cmd.replace(
+            "ProxyCommand='ssh ",
+            f"ProxyCommand='ssh -i {key_file.name} "
+            "-o StrictHostKeyChecking=no "
+            "-o UserKnownHostsFile=/dev/null "
+            "-o HostKeyAlgorithms=+ssh-rsa "
+            "-o PubkeyAcceptedAlgorithms=+ssh-rsa "
+        )
+
+    await websocket.send_text(f"\r\n\x1b[33m正在连接 OCI 串行控制台...\x1b[0m\r\n")
+
+    try:
+        process = await asyncio.create_subprocess_shell(
+            ssh_cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+    except Exception as e:
+        await websocket.send_text(f"\r\n\x1b[31m启动 SSH 进程失败: {str(e)}\x1b[0m\r\n")
+        os.unlink(key_file.name)
+        await websocket.close()
+        return
+
+    await websocket.send_text(f"\r\n\x1b[32m已连接\x1b[0m\r\n")
+
+    async def read_from_process():
+        """从 SSH 进程读取输出发送到 WebSocket"""
+        while True:
+            try:
+                data = await process.stdout.read(4096)
+                if not data:
+                    break
+                await websocket.send_text(data.decode("utf-8", errors="replace"))
+            except Exception:
+                break
+
+    async def read_from_ws():
+        """从 WebSocket 读取输入发送到 SSH 进程"""
+        while True:
+            try:
+                data = await websocket.receive_text()
+                if process.stdin:
+                    process.stdin.write(data.encode("utf-8"))
+                    await process.stdin.drain()
+            except (WebSocketDisconnect, Exception):
+                break
+
+    try:
+        await asyncio.gather(read_from_process(), read_from_ws(), return_exceptions=True)
+    finally:
+        process.kill()
+        os.unlink(key_file.name)
+        try:
+            await websocket.close()
+        except Exception:
+            pass

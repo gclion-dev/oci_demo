@@ -45,9 +45,9 @@
 
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2 flex-wrap">
-                <button v-if="inst.lifecycle_state === 'STOPPED'" class="btn-primary btn-sm" @click="doAction(inst, 'START')">开机</button>
-                <button v-if="inst.lifecycle_state === 'RUNNING'" class="btn-secondary btn-sm" @click="doAction(inst, 'SOFTSTOP')">关机</button>
-                <button v-if="inst.lifecycle_state === 'RUNNING'" class="btn-ghost btn-sm" @click="doAction(inst, 'RESET')">重启</button>
+                <button v-if="inst.lifecycle_state === 'STOPPED'" class="btn-primary btn-sm" @click="doAction(inst, 'START')" title="启动实例">开机</button>
+                <button v-if="inst.lifecycle_state === 'RUNNING'" class="btn-secondary btn-sm" @click="doAction(inst, 'SOFTSTOP')" title="发送关机命令给 OS，等待 15 分钟后强制断电">关机</button>
+                <button v-if="inst.lifecycle_state === 'RUNNING'" class="btn-ghost btn-sm" @click="doAction(inst, 'SOFTRESET')" title="发送关机命令给 OS，等待关闭后重新启动（优雅重启）">重启</button>
                 <button v-if="inst.public_ip && inst.lifecycle_state === 'RUNNING'" class="btn-primary btn-sm" @click="openSSHDialog(inst)">SSH</button>
               </div>
               <div class="relative">
@@ -68,7 +68,8 @@
           <button class="dropdown-item" :disabled="dropdownInst?.lifecycle_state !== 'RUNNING'" @click="handleDropdownAction('ipv6')">附加 IPv6</button>
           <button v-if="dropdownInst && isAmdShape(dropdownInst.shape)" class="dropdown-item" :disabled="dropdownInst?.lifecycle_state !== 'RUNNING'" @click="handleDropdownAction('enable500m')">开启 500M</button>
           <button v-if="dropdownInst && isAmdShape(dropdownInst.shape)" class="dropdown-item" :disabled="dropdownInst?.lifecycle_state !== 'RUNNING'" @click="handleDropdownAction('disable500m')">关闭 500M</button>
-          <button class="dropdown-item" :disabled="dropdownInst?.lifecycle_state !== 'RUNNING'" @click="handleDropdownAction('forceStop')">强制关机</button>
+          <button class="dropdown-item" :disabled="dropdownInst?.lifecycle_state !== 'RUNNING'" @click="handleDropdownAction('forceStop')" title="立即断电关机，不等待 OS 响应">强制关机</button>
+          <button class="dropdown-item" :disabled="dropdownInst?.lifecycle_state !== 'RUNNING'" @click="handleDropdownAction('hardReset')" title="立即断电后重新启动，不等待 OS 响应">硬重启</button>
           <hr class="my-1 border-surface-200 dark:border-surface-700" />
           <button class="dropdown-item text-red-600 dark:text-red-400" @click="handleDropdownAction('terminate')">删除实例</button>
         </div>
@@ -176,6 +177,7 @@
       </template>
       <div v-else-if="!vncLoading" class="text-center text-surface-400 py-10">正在准备...</div>
       <template #footer>
+        <button v-if="vncResult?.ssh_connection_string && vncResult?.private_key" class="btn-primary btn-sm" @click="doVncConsoleConnect">连接控制台</button>
         <button v-if="vncResult?.connection_id" class="btn-danger btn-sm" @click="doDeleteVncConnection">删除连接</button>
         <button class="btn-secondary" @click="vncDialogVisible = false">关闭</button>
       </template>
@@ -248,6 +250,30 @@ const instances = ref<any[]>([])
 const loading = ref(false)
 const tenantName = ref('')
 
+function ipToNumber(ip: string | null | undefined): number {
+  if (!ip) return 0
+  const parts = ip.split('.').map(Number)
+  return ((parts[0] || 0) << 24) + ((parts[1] || 0) << 16) + ((parts[2] || 0) << 8) + (parts[3] || 0)
+}
+
+function sortInstances(list: any[]): any[] {
+  return list.slice().sort((a, b) => {
+    // 1. OCPU 从大到小
+    const ocpuDiff = (b.ocpus || 0) - (a.ocpus || 0)
+    if (ocpuDiff !== 0) return ocpuDiff
+    // 2. 内存从大到小
+    const memDiff = (b.memory_in_gbs || 0) - (a.memory_in_gbs || 0)
+    if (memDiff !== 0) return memDiff
+    // 3. AD 区域从小到大
+    const adA = shortAD(a.availability_domain || '')
+    const adB = shortAD(b.availability_domain || '')
+    const adDiff = adA.localeCompare(adB)
+    if (adDiff !== 0) return adDiff
+    // 4. IP 数字从小到大
+    return ipToNumber(a.public_ip) - ipToNumber(b.public_ip)
+  })
+}
+
 const regionGroups = computed(() => {
   const groups: Record<string, any[]> = {}
   for (const inst of instances.value) {
@@ -257,7 +283,7 @@ const regionGroups = computed(() => {
   }
   return Object.keys(groups)
     .sort((a, b) => groups[b].length - groups[a].length)
-    .map(name => ({ name, instances: groups[name] }))
+    .map(name => ({ name, instances: sortInstances(groups[name]) }))
 })
 
 function stateClass(s: string) {
@@ -328,6 +354,7 @@ function handleDropdownAction(action: string) {
     case 'enable500m': doEnable500M(inst); break
     case 'disable500m': doDisable500M(inst); break
     case 'forceStop': doAction(inst, 'STOP'); break
+    case 'hardReset': doAction(inst, 'RESET'); break
     case 'terminate': doTerminate(inst); break
   }
 }
@@ -354,7 +381,7 @@ async function load() {
 }
 
 async function doAction(inst: any, action: string) {
-  const actionMap: Record<string, string> = { START: '开机', STOP: '强制关机', SOFTSTOP: '关机', RESET: '重启' }
+  const actionMap: Record<string, string> = { START: '开机', STOP: '强制关机', SOFTSTOP: '关机', RESET: '硬重启', SOFTRESET: '重启' }
   const ok = await confirm(`确认对实例「${inst.display_name}」执行【${actionMap[action]}】操作？`, '确认操作')
   if (!ok) return
   openInstDropdownId.value = null
@@ -407,6 +434,26 @@ async function doDeleteVncConnection() {
     success('连接已删除')
     vncDialogVisible.value = false
   } catch { /* handled by interceptor */ }
+}
+
+function doVncConsoleConnect() {
+  if (!vncResult.value?.ssh_connection_string || !vncResult.value?.private_key) return
+  const sessionKey = `ssh_session_${Date.now()}`
+  localStorage.setItem(sessionKey, JSON.stringify({
+    host: '',  // not used for console
+    port: 22,
+    username: '',
+    authType: 'console',
+    password: '',
+    privateKey: '',
+    tenantId,
+    consoleMode: true,
+    sshConnectionString: vncResult.value.ssh_connection_string,
+    consolePrivateKey: vncResult.value.private_key,
+  }))
+  vncDialogVisible.value = false
+  const url = router.resolve({ path: '/terminal', query: { sk: sessionKey } }).href
+  window.open(url, '_blank')
 }
 
 function copyText(text: string) {
@@ -504,15 +551,17 @@ async function doSSHConnect() {
     } catch { /* ignore */ }
   }
 
-  sessionStorage.setItem('ssh_session', JSON.stringify({
+  sshDialogVisible.value = false
+  const sessionKey = `ssh_session_${Date.now()}`
+  localStorage.setItem(sessionKey, JSON.stringify({
     host: sshTarget.value.public_ip, port: sshForm.port, username: sshForm.username,
     authType: sshForm.authType,
     password: sshForm.authType === 'password' ? sshForm.password : '',
     privateKey: sshForm.authType === 'key' ? sshForm.privateKey : '',
     tenantId,
   }))
-  sshDialogVisible.value = false
-  router.push({ path: '/terminal' })
+  const url = router.resolve({ path: '/terminal', query: { sk: sessionKey } }).href
+  window.open(url, '_blank')
 }
 
 // ── Config ───────────────────────────────────────────────────────────────────
