@@ -1,4 +1,4 @@
-"""统一通知模块：支持邮件 + 企业微信 Webhook"""
+"""统一通知模块：支持邮件 + 企业微信 Webhook + Telegram Bot"""
 import smtplib
 import httpx
 from email.mime.text import MIMEText
@@ -74,6 +74,28 @@ def send_wecom(webhook_url: str, content: str) -> bool:
         return False
 
 
+def send_telegram(bot_token: str, chat_id: str, content: str) -> bool:
+    """Telegram Bot 推送"""
+    try:
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            "chat_id": chat_id,
+            "text": content,
+            "parse_mode": "HTML",
+        }
+        resp = httpx.post(url, json=payload, timeout=15)
+        data = resp.json()
+        if data.get("ok"):
+            logger.info("Telegram 消息发送成功")
+            return True
+        else:
+            logger.error(f"Telegram 发送失败: {data}")
+            return False
+    except Exception as e:
+        logger.error(f"Telegram 发送异常: {e}")
+        return False
+
+
 async def dispatch_notify(db, owner_id: int, subject: str, body: str):
     """根据用户配置自动分发通知"""
     from sqlalchemy import select
@@ -100,3 +122,5 @@ async def dispatch_notify(db, owner_id: int, subject: str, body: str):
             )
         elif cfg.notify_type == "wecom" and cfg.wecom_webhook:
             send_wecom(cfg.wecom_webhook, f"【{subject}】\n{body}")
+        elif cfg.notify_type == "telegram" and cfg.telegram_bot_token and cfg.telegram_chat_id:
+            send_telegram(cfg.telegram_bot_token, cfg.telegram_chat_id, f"<b>{subject}</b>\n\n{body}")

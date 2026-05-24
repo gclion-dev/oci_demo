@@ -264,7 +264,7 @@ def _notify_result(db_url, task_id, tenant_data, status, ip, attempt, instance_i
         from sqlalchemy import create_engine, select
         from sqlalchemy.orm import Session
         from app.models import NotifyConfig, Tenant, SnipeTask
-        from app.notify import send_email, send_wecom
+        from app.notify import send_email, send_wecom, send_telegram
         from app.config import settings
 
         sync_url = settings.get_sync_url()
@@ -330,6 +330,8 @@ def _notify_result(db_url, task_id, tenant_data, status, ip, attempt, instance_i
                                cfg.sender_password, cfg.receiver_email, subject, body)
                 elif cfg.notify_type == "wecom" and cfg.wecom_webhook:
                     send_wecom(cfg.wecom_webhook, f"【{subject}】\n{body}")
+                elif cfg.notify_type == "telegram" and cfg.telegram_bot_token and cfg.telegram_chat_id:
+                    send_telegram(cfg.telegram_bot_token, cfg.telegram_chat_id, f"<b>{subject}</b>\n\n{body}")
         engine.dispose()
     except Exception as e:
         logger.error(f"通知发送失败: {e}")

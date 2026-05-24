@@ -114,11 +114,11 @@ class SSHCredential(Base):
 
 
 class NotifyConfig(Base):
-    """通知配置（邮件 / 企业微信）"""
+    """通知配置（邮件 / 企业微信 / Telegram）"""
     __tablename__ = "notify_configs"
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    notify_type = Column(String(32), nullable=False)   # email / wecom
+    notify_type = Column(String(32), nullable=False)   # email / wecom / telegram
     # email fields
     smtp_server = Column(String(128), nullable=True)
     smtp_port = Column(Integer, nullable=True)
@@ -127,6 +127,9 @@ class NotifyConfig(Base):
     receiver_email = Column(String(256), nullable=True)
     # wecom fields
     wecom_webhook = Column(String(512), nullable=True)
+    # telegram fields
+    telegram_bot_token = Column(String(256), nullable=True)
+    telegram_chat_id = Column(String(128), nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 

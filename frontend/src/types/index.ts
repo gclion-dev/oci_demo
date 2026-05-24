@@ -94,7 +94,7 @@ export interface DnsRecord {
 // ── Notify ───────────────────────────────────────────────────────────────────
 export interface NotifyConfig {
   id: number
-  notify_type: 'email' | 'wecom'
+  notify_type: 'email' | 'wecom' | 'telegram'
   is_active: boolean
   smtp_server: string | null
   smtp_port: number | null
@@ -102,6 +102,8 @@ export interface NotifyConfig {
   sender_password: string | null
   receiver_email: string | null
   wecom_webhook: string | null
+  telegram_bot_token: string | null
+  telegram_chat_id: string | null
 }
 
 // ── Bills ────────────────────────────────────────────────────────────────────

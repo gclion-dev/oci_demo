@@ -12,15 +12,18 @@
       <div v-for="cfg in configs" :key="cfg.id" class="card p-5 space-y-4">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <div class="w-8 h-8 rounded-lg flex items-center justify-center" :class="cfg.notify_type === 'email' ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-green-100 dark:bg-green-900/30'">
+            <div class="w-8 h-8 rounded-lg flex items-center justify-center" :class="cfg.notify_type === 'email' ? 'bg-blue-100 dark:bg-blue-900/30' : cfg.notify_type === 'telegram' ? 'bg-sky-100 dark:bg-sky-900/30' : 'bg-green-100 dark:bg-green-900/30'">
               <svg v-if="cfg.notify_type === 'email'" class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              <svg v-else-if="cfg.notify_type === 'telegram'" class="w-4 h-4 text-sky-600 dark:text-sky-400" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
               </svg>
               <svg v-else class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
             </div>
-            <span class="font-semibold text-surface-900 dark:text-white">{{ cfg.notify_type === 'email' ? '邮件通知' : '企业微信' }}</span>
+            <span class="font-semibold text-surface-900 dark:text-white">{{ cfg.notify_type === 'email' ? '邮件通知' : cfg.notify_type === 'telegram' ? 'Telegram' : '企业微信' }}</span>
           </div>
           <span :class="cfg.is_active ? 'badge-success' : 'badge-neutral'">{{ cfg.is_active ? '启用' : '禁用' }}</span>
         </div>
@@ -30,6 +33,10 @@
             <div>发件人: {{ cfg.sender_email }}</div>
             <div>收件人: {{ cfg.receiver_email }}</div>
             <div>SMTP: {{ cfg.smtp_server }}:{{ cfg.smtp_port }}</div>
+          </template>
+          <template v-else-if="cfg.notify_type === 'telegram'">
+            <div>Bot Token: {{ cfg.telegram_bot_token?.substring(0, 20) }}...</div>
+            <div>Chat ID: {{ cfg.telegram_chat_id }}</div>
           </template>
           <template v-else>
             <div class="truncate">Webhook: {{ cfg.wecom_webhook?.substring(0, 40) }}...</div>
@@ -63,6 +70,9 @@
             </button>
             <button type="button" @click="form.notify_type = 'wecom'" class="flex-1 py-2 rounded-lg border text-sm font-medium transition-all" :class="form.notify_type === 'wecom' ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/50 text-primary-700 dark:text-primary-300' : 'border-surface-300 dark:border-surface-600 text-surface-600 dark:text-surface-400'">
               企业微信
+            </button>
+            <button type="button" @click="form.notify_type = 'telegram'" class="flex-1 py-2 rounded-lg border text-sm font-medium transition-all" :class="form.notify_type === 'telegram' ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/50 text-primary-700 dark:text-primary-300' : 'border-surface-300 dark:border-surface-600 text-surface-600 dark:text-surface-400'">
+              Telegram
             </button>
           </div>
         </div>
@@ -101,6 +111,20 @@
             在企业微信群中添加机器人，复制 Webhook 地址粘贴到此处
           </div>
         </template>
+
+        <template v-if="form.notify_type === 'telegram'">
+          <div>
+            <label class="label">Bot Token</label>
+            <input v-model="form.telegram_bot_token" class="input" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" />
+          </div>
+          <div>
+            <label class="label">Chat ID</label>
+            <input v-model="form.telegram_chat_id" class="input" placeholder="群组或用户的 Chat ID" />
+          </div>
+          <div class="text-sm text-surface-500 bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3">
+            通过 @BotFather 创建 Bot 获取 Token，发送消息给 @userinfobot 获取 Chat ID
+          </div>
+        </template>
       </form>
       <template #footer>
         <button class="btn-secondary" @click="dialogVisible = false">取消</button>
@@ -127,13 +151,15 @@ const saving = ref(false)
 const editId = ref<number | null>(null)
 
 const form = reactive({
-  notify_type: 'email' as 'email' | 'wecom',
+  notify_type: 'email' as 'email' | 'wecom' | 'telegram',
   smtp_server: 'smtp.qq.com',
   smtp_port: 587,
   sender_email: '',
   sender_password: '',
   receiver_email: '',
   wecom_webhook: '',
+  telegram_bot_token: '',
+  telegram_chat_id: '',
 })
 
 async function load() {
@@ -143,7 +169,7 @@ async function load() {
 
 function openAdd() {
   editId.value = null
-  Object.assign(form, { notify_type: 'email', smtp_server: 'smtp.qq.com', smtp_port: 587, sender_email: '', sender_password: '', receiver_email: '', wecom_webhook: '' })
+  Object.assign(form, { notify_type: 'email', smtp_server: 'smtp.qq.com', smtp_port: 587, sender_email: '', sender_password: '', receiver_email: '', wecom_webhook: '', telegram_bot_token: '', telegram_chat_id: '' })
   dialogVisible.value = true
 }
 
@@ -157,6 +183,8 @@ function openEdit(cfg: NotifyConfig) {
     sender_password: '',
     receiver_email: cfg.receiver_email || '',
     wecom_webhook: cfg.wecom_webhook || '',
+    telegram_bot_token: cfg.telegram_bot_token || '',
+    telegram_chat_id: cfg.telegram_chat_id || '',
   })
   dialogVisible.value = true
 }

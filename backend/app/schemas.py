@@ -151,13 +151,15 @@ class BillRecordOut(BaseModel):
 
 # ── Notify ────────────────────────────────────────────────────────────────────
 class NotifyConfigCreate(BaseModel):
-    notify_type: str   # email / wecom
+    notify_type: str   # email / wecom / telegram
     smtp_server: Optional[str] = None
     smtp_port: Optional[int] = None
     sender_email: Optional[str] = None
     sender_password: Optional[str] = None
     receiver_email: Optional[str] = None
     wecom_webhook: Optional[str] = None
+    telegram_bot_token: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
 
 
 class NotifyConfigOut(BaseModel):
@@ -168,6 +170,8 @@ class NotifyConfigOut(BaseModel):
     sender_email: Optional[str]
     receiver_email: Optional[str]
     wecom_webhook: Optional[str]
+    telegram_bot_token: Optional[str]
+    telegram_chat_id: Optional[str]
     is_active: bool
 
     class Config:

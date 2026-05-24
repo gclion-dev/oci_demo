@@ -83,6 +83,12 @@ async def lifespan(app: FastAPI):
             await db.execute(text(
                 "ALTER TABLE quick_commands ADD COLUMN IF NOT EXISTS category VARCHAR(64) DEFAULT '默认分类'"
             ))
+            await db.execute(text(
+                "ALTER TABLE notify_configs ADD COLUMN IF NOT EXISTS telegram_bot_token VARCHAR(256)"
+            ))
+            await db.execute(text(
+                "ALTER TABLE notify_configs ADD COLUMN IF NOT EXISTS telegram_chat_id VARCHAR(128)"
+            ))
             await db.commit()
         except Exception:
             await db.rollback()

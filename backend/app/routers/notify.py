@@ -5,7 +5,7 @@ from typing import List
 from app.database import get_db
 from app import models, schemas
 from app.auth import get_current_user
-from app.notify import send_email, send_wecom
+from app.notify import send_email, send_wecom, send_telegram
 
 router = APIRouter(prefix="/api/notify", tags=["通知配置"])
 
@@ -84,6 +84,8 @@ async def test_notify(
         )
     elif cfg.notify_type == "wecom":
         ok = send_wecom(cfg.wecom_webhook, f"【OCI Manager 测试通知】\n{data.message}")
+    elif cfg.notify_type == "telegram":
+        ok = send_telegram(cfg.telegram_bot_token, cfg.telegram_chat_id, f"<b>OCI Manager 测试通知</b>\n\n{data.message}")
     else:
         raise HTTPException(status_code=400, detail="未知通知类型")
 
