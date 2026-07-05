@@ -17,6 +17,160 @@ _stop_flags: Dict[int, bool] = {}
 ARM_SHAPE = "VM.Standard.A1.Flex"
 AMD_SHAPE = "VM.Standard.E2.1.Micro"
 
+DEFAULT_CIDR_BLOCK = "10.0.0.0/16"
+VCN_NAME = "oci-helper-vcn"
+IG_NAME = "oci-helper-gateway"
+SUBNET_NAME = "oci-helper-subnet"
+
+
+def _get_or_create_vcn(network, compartment_id: str, log_lines: list):
+    """获取一个可用 VCN，如不存在则创建。参考 oci-helper 逻辑。"""
+    vcns = network.list_vcns(
+        compartment_id=compartment_id,
+        lifecycle_state="AVAILABLE",
+    ).data
+    if vcns:
+        return vcns[0]
+
+    _append_log(log_lines, f"未检测到 VCN，正在创建 VCN: {VCN_NAME} ({DEFAULT_CIDR_BLOCK})")
+    details = oci.core.models.CreateVcnDetails(
+        cidr_block=DEFAULT_CIDR_BLOCK,
+        is_ipv6_enabled=True,
+        compartment_id=compartment_id,
+        display_name=VCN_NAME,
+    )
+    resp = network.create_vcn(details)
+    vcn_id = resp.data.id
+    # Wait for AVAILABLE
+    vcn = oci.wait_until(
+        network,
+        network.get_vcn(vcn_id),
+        "lifecycle_state",
+        "AVAILABLE",
+        max_wait_seconds=180,
+    ).data
+    _append_log(log_lines, f"VCN 创建成功: {vcn.id}")
+    return vcn
+
+
+def _get_or_create_internet_gateway(network, compartment_id: str, vcn, log_lines: list):
+    """获取或创建 Internet Gateway。"""
+    igs = network.list_internet_gateways(
+        compartment_id=compartment_id,
+        vcn_id=vcn.id,
+    ).data
+    if igs:
+        return igs[0]
+
+    _append_log(log_lines, f"未检测到 Internet Gateway，正在创建: {IG_NAME}")
+    details = oci.core.models.CreateInternetGatewayDetails(
+        compartment_id=compartment_id,
+        display_name=IG_NAME,
+        is_enabled=True,
+        vcn_id=vcn.id,
+    )
+    resp = network.create_internet_gateway(details)
+    ig_id = resp.data.id
+    ig = oci.wait_until(
+        network,
+        network.get_internet_gateway(ig_id),
+        "lifecycle_state",
+        "AVAILABLE",
+        max_wait_seconds=180,
+    ).data
+    _append_log(log_lines, f"Internet Gateway 创建成功: {ig.id}")
+    return ig
+
+
+def _ensure_default_route(network, vcn, internet_gateway, log_lines: list):
+    """确保默认路由表存在 0.0.0.0/0 → IG 规则。"""
+    rt = network.get_route_table(rt_id=vcn.default_route_table_id).data
+    for rule in (rt.route_rules or []):
+        if rule.destination == "0.0.0.0/0" and rule.destination_type == "CIDR_BLOCK":
+            return
+    new_rule = oci.core.models.RouteRule(
+        destination="0.0.0.0/0",
+        destination_type="CIDR_BLOCK",
+        network_entity_id=internet_gateway.id,
+    )
+    updated = list(rt.route_rules or []) + [new_rule]
+    network.update_route_table(
+        rt_id=rt.id,
+        update_route_table_details=oci.core.models.UpdateRouteTableDetails(route_rules=updated),
+    )
+    _append_log(log_lines, "已为默认路由表添加 0.0.0.0/0 → Internet Gateway 规则")
+
+
+def _create_subnet(network, compartment_id: str, vcn, log_lines: list):
+    """创建公有子网。"""
+    _append_log(log_lines, f"正在创建子网: {SUBNET_NAME} ({vcn.cidr_block})")
+    details = oci.core.models.CreateSubnetDetails(
+        compartment_id=compartment_id,
+        display_name=SUBNET_NAME,
+        cidr_block=vcn.cidr_block,
+        vcn_id=vcn.id,
+        route_table_id=vcn.default_route_table_id,
+    )
+    resp = network.create_subnet(details)
+    subnet = oci.wait_until(
+        network,
+        network.get_subnet(resp.data.id),
+        "lifecycle_state",
+        "AVAILABLE",
+        max_wait_seconds=180,
+    ).data
+    _append_log(log_lines, f"子网创建成功: {subnet.id}")
+    return subnet
+
+
+def _ensure_network(network, compartment_id: str, log_lines: list):
+    """
+    确保租户在当前区域存在可用的 VCN + Internet Gateway + 公有子网。
+    参考 oci-helper OracleInstanceFetcher 的处理逻辑：
+      1. 无 VCN → 创建 VCN + IG + 路由 + 子网
+      2. 有 VCN 但无 IG → 补建 IG + 路由
+      3. 有 VCN 但无子网 → 创建子网
+      4. 有 VCN 但只有私有子网 → 删除私有子网并创建公有子网
+    返回可用的 subnet.id
+    """
+    # 尝试直接列举现有 subnet（快速路径）
+    existing = network.list_subnets(compartment_id=compartment_id).data
+    for sn in existing:
+        if not sn.prohibit_public_ip_on_vnic:
+            return sn.id
+
+    # 走完整创建流程
+    vcn = _get_or_create_vcn(network, compartment_id, log_lines)
+    ig = _get_or_create_internet_gateway(network, compartment_id, vcn, log_lines)
+    _ensure_default_route(network, vcn, ig, log_lines)
+
+    subnets = network.list_subnets(compartment_id=compartment_id, vcn_id=vcn.id).data
+    public_subnet = next(
+        (s for s in subnets if not s.prohibit_public_ip_on_vnic),
+        None,
+    )
+    if public_subnet:
+        return public_subnet.id
+
+    # 如果只有私有子网，先删除再重建
+    for s in subnets:
+        try:
+            _append_log(log_lines, f"删除私有子网: {s.display_name}")
+            network.delete_subnet(subnet_id=s.id)
+            oci.wait_until(
+                network,
+                network.get_subnet(s.id),
+                "lifecycle_state",
+                "TERMINATED",
+                max_wait_seconds=180,
+                succeed_on_not_found=True,
+            )
+        except Exception as e:
+            _append_log(log_lines, f"删除子网失败（忽略）: {e}")
+
+    subnet = _create_subnet(network, compartment_id, vcn, log_lines)
+    return subnet.id
+
 
 def is_running(task_id: int) -> bool:
     t = _running_tasks.get(task_id)
@@ -121,13 +275,18 @@ def _run_snipe(task_id: int, tenant_data: dict, task_data: dict, db_url: str):
 
         _append_log(log_lines, f"使用镜像 ID: {image_id}")
 
-        # Get subnet
-        subnets = network.list_subnets(compartment_id=compartment_id).data
-        if not subnets:
-            _append_log(log_lines, "ERROR: 未找到子网，任务终止")
+        # Get or create subnet (auto-provision VCN/IG/Subnet for new accounts)
+        try:
+            subnet_id = _ensure_network(network, compartment_id, log_lines)
+        except Exception as e:
+            _append_log(log_lines, f"ERROR: 网络资源准备失败: {e}")
             _update_task_db(db_url, task_id, "failed", "\n".join(log_lines))
             return
-        subnet_id = subnets[0].id
+        if not subnet_id:
+            _append_log(log_lines, "ERROR: 未找到子网且无法自动创建，任务终止")
+            _update_task_db(db_url, task_id, "failed", "\n".join(log_lines))
+            return
+        _append_log(log_lines, f"使用子网: {subnet_id}")
 
         # Build launch request
         request = oci.core.models.LaunchInstanceDetails()
